@@ -121,7 +121,8 @@ Le script copie :
 
 - le bloc de commentaires placé immédiatement avant le nom de la fonction ;
 - le commentaire situé après la ligne du nom de fonction ;
-- les commentaires de fin de ligne des paramètres, associés par nom puis type ;
+- les commentaires de fin de ligne des paramètres, associés d'abord par nom puis
+  par position ; les types ne participent jamais à cette association ;
 - le commentaire situé après la parenthèse fermante.
 
 La tabulation obligatoire concerne uniquement les commentaires qui occupent une

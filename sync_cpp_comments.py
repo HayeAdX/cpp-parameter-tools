@@ -107,7 +107,7 @@ def _parameter_pairs(
 
         if reference_parameter is None and position < len(reference.parameters):
             positional = reference.parameters[position]
-            if positional.type_fingerprint == target_parameter.type_fingerprint:
+            if positional.line_index not in used_reference_lines:
                 reference_parameter = positional
 
         if reference_parameter is not None:

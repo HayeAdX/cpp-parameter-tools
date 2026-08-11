@@ -81,6 +81,30 @@ class SyncCommentsTests(unittest.TestCase):
         self.assertFalse(result.ambiguous_functions)
         self.assertIn("const Text& value\t// commentaire copié", result.text)
 
+    def test_parameter_comments_fall_back_to_position_without_using_types(self) -> None:
+        reference = (
+            "void process(\n"
+            "  LegacyHandle& source_item, // description de l'élément\n"
+            "  int source_count // quantité\n"
+            ");\n"
+        )
+        target = (
+            "void FIC_process(\n"
+            "  ModernPointer renamed_item, // ancien élément\n"
+            "  long renamed_count // ancienne quantité\n"
+            ");\n"
+        )
+
+        result = synchronizer.sync_comments(reference, target)
+
+        self.assertEqual(result.matched_functions, 1)
+        self.assertFalse(result.unmatched_functions)
+        self.assertFalse(result.ambiguous_functions)
+        self.assertIn("ModernPointer renamed_item,\t// description de l'élément", result.text)
+        self.assertIn("long renamed_count\t// quantité", result.text)
+        self.assertNotIn("ancien élément", result.text)
+        self.assertNotIn("ancienne quantité", result.text)
+
     def test_flush_left_comment_is_ignored_but_inline_comments_are_copied(self) -> None:
         reference = (
             "// documentation collée à gauche\tavec tab après le marqueur\n"
