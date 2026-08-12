@@ -105,6 +105,44 @@ class SyncCommentsTests(unittest.TestCase):
         self.assertNotIn("ancien élément", result.text)
         self.assertNotIn("ancienne quantité", result.text)
 
+    def test_comment_sync_is_independent_of_comma_placement(self) -> None:
+        cases = (
+            (
+                "void transform(\n"
+                "  int first // premier actualisé\n"
+                "  , Text second // second actualisé\n"
+                ");\n",
+                "void FIC_transform(\n"
+                "  long first, // ancien premier\n"
+                "  Name second // ancien second\n"
+                ");\n",
+                "long first,\t// premier actualisé",
+                "Name second\t// second actualisé",
+            ),
+            (
+                "void transform(\n"
+                "  int first, // premier actualisé\n"
+                "  Text second // second actualisé\n"
+                ");\n",
+                "void FIC_transform(\n"
+                "  long first // ancien premier\n"
+                "  , Name second // ancien second\n"
+                ");\n",
+                "long first\t// premier actualisé",
+                ", Name second\t// second actualisé",
+            ),
+        )
+
+        for reference, target, expected_first, expected_second in cases:
+            with self.subTest(target=target):
+                result = synchronizer.sync_comments(reference, target)
+
+                self.assertEqual(result.matched_functions, 1)
+                self.assertFalse(result.unmatched_functions)
+                self.assertFalse(result.ambiguous_functions)
+                self.assertIn(expected_first, result.text)
+                self.assertIn(expected_second, result.text)
+
     def test_flush_left_comment_is_ignored_but_inline_comments_are_copied(self) -> None:
         reference = (
             "// documentation collée à gauche\tavec tab après le marqueur\n"

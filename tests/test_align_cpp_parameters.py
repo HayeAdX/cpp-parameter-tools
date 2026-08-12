@@ -177,6 +177,72 @@ class FormatSourceTests(unittest.TestCase):
         self.assertIsNotNone(first_match)
         self.assertIsNotNone(second_match)
 
+    def test_leading_comma_style_places_separator_after_indent(self) -> None:
+        source = (
+            "void configure(\n"
+            "  int short_name = 1, // premier\n"
+            "  const LongType& longer_name = 200, // second\n"
+            "  bool enabled = true // dernier\n"
+            ");\n"
+        )
+
+        result = aligner.format_source(
+            source,
+            is_header=True,
+            comma_style="leading",
+        )
+        first, second, third = result.text.splitlines()[1:4]
+
+        self.assertTrue(first.startswith("\tint"))
+        self.assertTrue(second.startswith("\t, const LongType&"))
+        self.assertTrue(third.startswith("\t, bool"))
+        self.assertNotRegex(first, r",\t+// premier$")
+        self.assertNotRegex(second, r"200,\t+// second$")
+        self.assertEqual(
+            [
+                token_column(line, token)
+                for line, token in zip(
+                    (first, second, third),
+                    ("short_name", "longer_name", "enabled"),
+                )
+            ],
+            [24, 24, 24],
+        )
+        self.assertEqual(
+            [token_column(line, "=") for line in (first, second, third)],
+            [36, 36, 36],
+        )
+        self.assertEqual(
+            [comment_column(line) for line in (first, second, third)],
+            [44, 44, 44],
+        )
+        self.assertEqual(
+            aligner.format_source(
+                result.text,
+                is_header=True,
+                comma_style="leading",
+            ).text,
+            result.text,
+        )
+
+        trailing = aligner.format_source(
+            result.text,
+            is_header=True,
+            comma_style="trailing",
+        ).text
+        trailing_lines = trailing.splitlines()[1:4]
+        self.assertRegex(trailing_lines[0], r"1,\t+// premier$")
+        self.assertRegex(trailing_lines[1], r"200,\t+// second$")
+        self.assertNotIn("\n\t, ", trailing)
+
+    def test_unknown_comma_style_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "comma_style"):
+            aligner.format_source(
+                "void f(\n  int value\n);\n",
+                is_header=True,
+                comma_style="middle",
+            )
+
     def test_common_cpp_declarators_are_supported_and_idempotent(self) -> None:
         source = (
             "void visit(\n"
@@ -251,6 +317,41 @@ class CliTests(unittest.TestCase):
             self.assertNotIn(b"\n", payload.replace(b"\r\n", b""))
             self.assertIn("\tint\t", source_file.read_text(encoding="utf-8"))
             self.assertEqual(ignored.read_bytes(), original.encode("utf-8"))
+
+    def test_cli_can_select_leading_comma_style(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            source_file = Path(temporary_directory) / "sample.cpp"
+            source_file.write_text(
+                "void process(\n"
+                "  int first, // premier\n"
+                "  LongType second // second\n"
+                ");\n",
+                encoding="utf-8",
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(
+                    aligner.main(
+                        ["--check", "--comma-style", "leading", str(source_file)]
+                    ),
+                    1,
+                )
+                self.assertEqual(
+                    aligner.main(
+                        ["--comma-style", "leading", str(source_file)]
+                    ),
+                    0,
+                )
+                self.assertEqual(
+                    aligner.main(
+                        ["--check", "--comma-style", "leading", str(source_file)]
+                    ),
+                    0,
+                )
+
+            formatted = source_file.read_text(encoding="utf-8")
+            self.assertIn("\n\t, LongType", formatted)
+            self.assertNotRegex(formatted, r"first,\t+// premier")
 
 
 if __name__ == "__main__":

@@ -19,8 +19,8 @@ L'outil :
 - aligne les `=` des valeurs par défaut dans les headers ;
 - aligne les commentaires de fin de ligne une tabulation après la ligne de code
   la plus longue ;
-- transforme les virgules placées au début d'une ligne en virgules placées à la
-  fin du paramètre précédent ;
+- permet de choisir entre les virgules à la fin du paramètre précédent (mode par
+  défaut) et les virgules au début de la ligne suivante ;
 - n'utilise que des caractères de tabulation pour les espacements d'alignement ;
 - conserve les fins de ligne (`LF` ou `CRLF`) et un éventuel BOM UTF-8 ;
 - peut être relancé sans modifier une seconde fois les fichiers (idempotence).
@@ -50,9 +50,29 @@ Options utiles :
 
 ```text
 --tab-width 4             largeur visuelle des tabulations
+--comma-style trailing    virgule après le paramètre (mode par défaut)
+--comma-style leading     virgule au début de la ligne suivante
 --extensions .cpp,.h      extensions à traiter
 --no-recursive            ne pas parcourir les sous-dossiers
 --verbose                 afficher les fichiers inchangés
+```
+
+Pour placer les virgules au début des lignes :
+
+```bash
+python3 align_cpp_parameters.py --comma-style leading /chemin/vers/les/sources
+```
+
+Dans ce mode, la virgule est placée après la tabulation d'indentation, suivie
+d'un espace. Les noms, valeurs par défaut et commentaires restent alignés :
+
+```cpp
+Result
+make_order(
+	int								id		= 0		// identifiant
+	, const std::vector<std::string>&	symbols	= {}		// symboles
+	, bool							enabled	= true	// état
+);
 ```
 
 ### Exemple
@@ -116,6 +136,9 @@ l'association : `FIC_build` correspond donc à `build`.
 Si plusieurs fonctions de référence ont le même nom et le même nombre de
 paramètres, l'association est ambiguë : elle est ignorée et signalée au lieu de
 choisir une surcharge à partir de sa portée ou de ses types.
+
+Le placement des virgules est sans effet sur la synchronisation : le fichier de
+référence et le fichier cible peuvent employer des styles différents.
 
 Le script copie :
 

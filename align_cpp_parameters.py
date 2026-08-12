@@ -32,6 +32,7 @@ DEFAULT_EXTENSIONS = (
     ".hxx",
 )
 HEADER_EXTENSIONS = {".h", ".h++", ".hh", ".hpp", ".hxx"}
+COMMA_STYLES = ("trailing", "leading")
 
 CONTROL_WORDS = {
     "alignof",
@@ -666,6 +667,7 @@ def _format_block(
     *,
     align_defaults: bool,
     tab_width: int,
+    comma_style: str,
 ) -> bool:
     rows: list[ParameterRow] = []
 
@@ -685,19 +687,33 @@ def _format_block(
     for index in range(1, len(rows)):
         current = rows[index]
         previous = rows[index - 1]
-        if current.leading_comma:
+        if not current.leading_comma and not previous.trailing_comma:
+            return False
+
+    for index in range(1, len(rows)):
+        current = rows[index]
+        previous = rows[index - 1]
+        if comma_style == "leading":
+            previous.trailing_comma = False
+            current.leading_comma = True
+        else:
             previous.trailing_comma = True
             current.leading_comma = False
-        elif not previous.trailing_comma:
-            return False
 
     opener_body, _ = _split_line_ending(lines[start_line])
     opener_indent = opener_body[: len(opener_body) - len(opener_body.lstrip(" \t"))]
     indent = opener_indent + "\t"
+    prefixes = {
+        row.line_index: indent + (", " if row.leading_comma else "")
+        for row in rows
+    }
 
     named_rows = [row for row in rows if row.type_part is not None]
     type_end_columns = {
-        row.line_index: _display_width(indent + (row.type_part or ""), tab_width)
+        row.line_index: _display_width(
+            prefixes[row.line_index] + (row.type_part or ""),
+            tab_width,
+        )
         for row in named_rows
     }
     name_column = _next_tab_stop(max(type_end_columns.values()), tab_width)
@@ -705,12 +721,13 @@ def _format_block(
     code_by_line: dict[int, str] = {}
     name_end_columns: dict[int, int] = {}
     for row in rows:
+        prefix = prefixes[row.line_index]
         if row.type_part is None or row.name_part is None:
-            code = indent + row.declaration
+            code = prefix + row.declaration
         else:
             type_end = type_end_columns[row.line_index]
             code = (
-                indent
+                prefix
                 + row.type_part
                 + _tabs_to_column(type_end, name_column, tab_width)
                 + row.name_part
@@ -754,9 +771,17 @@ def _format_block(
     return True
 
 
-def format_source(text: str, *, is_header: bool, tab_width: int = 4) -> FormatResult:
+def format_source(
+    text: str,
+    *,
+    is_header: bool,
+    tab_width: int = 4,
+    comma_style: str = "trailing",
+) -> FormatResult:
     if tab_width < 1:
         raise ValueError("tab_width must be at least 1")
+    if comma_style not in COMMA_STYLES:
+        raise ValueError(f"comma_style must be one of: {', '.join(COMMA_STYLES)}")
 
     lines = text.splitlines(keepends=True)
     if not lines and text:
@@ -799,6 +824,7 @@ def format_source(text: str, *, is_header: bool, tab_width: int = 4) -> FormatRe
             end_line,
             align_defaults=is_header,
             tab_width=tab_width,
+            comma_style=comma_style,
         ):
             formatted_blocks += 1
         else:
@@ -904,6 +930,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="largeur visuelle d'une tabulation pour calculer les colonnes (défaut: 4)",
     )
     parser.add_argument(
+        "--comma-style",
+        choices=COMMA_STYLES,
+        default="trailing",
+        metavar="STYLE",
+        help=(
+            "placement des virgules: trailing à la fin du paramètre précédent "
+            "(défaut), leading au début de la ligne suivante"
+        ),
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="afficher aussi les fichiers qui ne changent pas",
@@ -937,6 +973,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 original,
                 is_header=path.suffix.lower() in HEADER_EXTENSIONS,
                 tab_width=args.tab_width,
+                comma_style=args.comma_style,
             )
         except (OSError, UnicodeError) as error:
             stats.errors += 1
